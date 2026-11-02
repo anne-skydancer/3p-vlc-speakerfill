@@ -9,18 +9,9 @@ permissions:
   contents: read
 env:
   AUTOBUILD_BUILD_ID: ${{ github.run_id }}
-  # Toolchain the module was validated with in the viewer (LLVM 22.1.8). Pinned by SHA-256.
-  LLVM_MINGW_URL: https://github.com/mstorsjo/llvm-mingw/releases/download/20260616/llvm-mingw-20260616-ucrt-x86_64.zip
-  LLVM_MINGW_SHA256: b9b68a4d276e16fa25802aaba458e4638f64b3884c290aaccdc2d87083b6ca35
 jobs:
   package:
     runs-on: windows-2025
-    strategy:
-      fail-fast: false
-      matrix:
-        # llvm-mingw: the toolchain the module was validated with in the viewer.
-        # runner-gcc: the GCC-based MinGW preinstalled on the GitHub Windows image.
-        toolchain: [llvm-mingw, runner-gcc]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -28,20 +19,9 @@ jobs:
           python-version: '3.11'
       - name: Install packaging tools
         run: python -m pip install autobuild==3.9.3
-      - name: Install pinned llvm-mingw
-        if: matrix.toolchain == 'llvm-mingw'
-        shell: pwsh
-        run: |
-          $zip = Join-Path $env:RUNNER_TEMP 'llvm-mingw.zip'
-          Invoke-WebRequest -Uri $env:LLVM_MINGW_URL -OutFile $zip
-          $actual = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLowerInvariant()
-          if ($actual -ne $env:LLVM_MINGW_SHA256) { throw "llvm-mingw hash mismatch: $actual" }
-          Expand-Archive $zip -DestinationPath $env:RUNNER_TEMP
-          $bin = Join-Path $env:RUNNER_TEMP 'llvm-mingw-20260616-ucrt-x86_64\bin'
-          if (-not (Test-Path (Join-Path $bin 'x86_64-w64-mingw32-gcc.exe'))) { throw 'x86_64-w64-mingw32-gcc.exe missing from llvm-mingw' }
-          $bin | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+      # The GCC-based MinGW-w64 preinstalled on the windows-2025 image (MSVCRT runtime, as VLC 3's own
+      # Windows build). llvm-mingw's lld crashed on this runner; the version used is recorded in build-info.txt.
       - name: Use the runner's MinGW gcc
-        if: matrix.toolchain == 'runner-gcc'
         shell: pwsh
         run: |
           $gcc = Get-Command gcc -ErrorAction Stop
@@ -82,7 +62,7 @@ jobs:
       - name: Upload tested package
         uses: actions/upload-artifact@v4
         with:
-          name: vlc-speakerfill-windows64-${{ matrix.toolchain }}
+          name: vlc-speakerfill-windows64
           path: '*.tar.zst'
           if-no-files-found: error
 
@@ -101,7 +81,7 @@ jobs:
           if [ "${GITHUB_REF_NAME}" != "$expected" ]; then echo "tag ${GITHUB_REF_NAME} != $expected"; exit 1; fi
       - uses: actions/download-artifact@v4
         with:
-          name: vlc-speakerfill-windows64-llvm-mingw
+          name: vlc-speakerfill-windows64
           path: dist
       - name: Create release
         env:
@@ -110,8 +90,11 @@ jobs:
           cd dist
           sha256sum *.tar.zst | tee SHA256SUMS.txt
           {
-            echo "VLC 3.0.21 speaker-fill WASAPI output module, built with pinned llvm-mingw 20260616 (LLVM 22.1.8). Temporary package."
+            echo "VLC 3.0.21 speaker-fill WASAPI output module (patched wasapi.c), built with the MinGW-w64 GCC of the GitHub windows-2025 image. Temporary package until the Rust audio engine reaches vkstorm-release."
             echo
+            echo '```'
+            tar --zstd -xOf *.tar.zst share/vlc-speakerfill/build-info.txt
+            echo '```'
             echo "SHA-256:"
             cat SHA256SUMS.txt
           } > notes.md

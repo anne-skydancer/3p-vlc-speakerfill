@@ -40,7 +40,7 @@ Dependency: the `vlc-bin` package (same URL and hash as the viewer) supplies the
 and the `libvlccore` import library.
 
 Compiler: `x86_64-w64-mingw32-gcc` must be on PATH; the build fails if it is missing and never falls back
-to another compiler. CI installs llvm-mingw 20260616 (LLVM 22.1.8, UCRT, x86_64) pinned by SHA-256, the
+to another compiler. CI installs the MinGW-w64 GCC preinstalled on GitHub's windows-2025 image (MSVCRT runtime, as VLC 3's own Windows build); the exact version is recorded in `share/vlc-speakerfill/build-info.txt` and in the release notes. llvm-mingw was tried first: its lld crashed on the runner.
 toolchain the module was validated with. The compiler version is printed in the CI log and stored in
 `share/vlc-speakerfill/build-info.txt`. The windows-2025 image also ships gcc 15.2.0 / binutils 2.46, but
 that has not been validated with this module.
