@@ -71,11 +71,11 @@ file(REMOVE "${SPEAKERFILL_OBJECT}")
 # Smoke test: a VLC 3 plugin must export its module entry points and link libvlccore.
 execute_process(COMMAND "${MINGW_OBJDUMP}" -p "${SPEAKERFILL_OUTPUT}"
   OUTPUT_VARIABLE dump COMMAND_ERROR_IS_FATAL ANY)
-foreach (symbol vlc_entry__3_0_0f vlc_entry_license__3_0_0f vlc_entry_copyright__3_0_0f)
-  if (NOT dump MATCHES "${symbol}")
-    message(FATAL_ERROR "Smoke test: ${symbol} is not exported by ${SPEAKERFILL_OUTPUT}")
-  endif ()
-endforeach ()
+# VLC 3's loader needs vlc_entry__<MODULE_SYMBOL>; the licence and copyright entries exist only
+# when a module defines VLC_MODULE_LICENSE / VLC_MODULE_COPYRIGHT, which wasapi.c does not.
+if (NOT dump MATCHES "vlc_entry__3_0_0f")
+  message(FATAL_ERROR "Smoke test: vlc_entry__3_0_0f is not exported by ${SPEAKERFILL_OUTPUT}")
+endif ()
 if (NOT dump MATCHES "libvlccore\.dll")
   message(FATAL_ERROR "Smoke test: libvlccore.dll is not imported")
 endif ()
