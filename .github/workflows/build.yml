@@ -1,0 +1,99 @@
+name: Build vlc-speakerfill package
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  AUTOBUILD_BUILD_ID: ${{ github.run_id }}
+  # Toolchain the module was validated with in the viewer (LLVM 22.1.8). Pinned by SHA-256.
+  LLVM_MINGW_URL: https://github.com/mstorsjo/llvm-mingw/releases/download/20260616/llvm-mingw-20260616-ucrt-x86_64.zip
+  LLVM_MINGW_SHA256: b9b68a4d276e16fa25802aaba458e4638f64b3884c290aaccdc2d87083b6ca35
+jobs:
+  package:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install packaging tools
+        run: python -m pip install autobuild==3.9.3
+      - name: Install pinned llvm-mingw
+        shell: pwsh
+        run: |
+          $zip = Join-Path $env:RUNNER_TEMP 'llvm-mingw.zip'
+          Invoke-WebRequest -Uri $env:LLVM_MINGW_URL -OutFile $zip
+          $actual = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLowerInvariant()
+          if ($actual -ne $env:LLVM_MINGW_SHA256) { throw "llvm-mingw hash mismatch: $actual" }
+          Expand-Archive $zip -DestinationPath $env:RUNNER_TEMP
+          $bin = Join-Path $env:RUNNER_TEMP 'llvm-mingw-20260616-ucrt-x86_64\bin'
+          if (-not (Test-Path (Join-Path $bin 'x86_64-w64-mingw32-gcc.exe'))) { throw 'x86_64-w64-mingw32-gcc.exe missing from llvm-mingw' }
+          $bin | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+      - name: Record compiler
+        shell: pwsh
+        run: |
+          $gcc = Get-Command x86_64-w64-mingw32-gcc -ErrorAction Stop
+          Write-Host $gcc.Source
+          & $gcc.Source --version
+          & $gcc.Source -dumpmachine
+      - name: Install dependencies (vlc-bin)
+        run: autobuild install -A 64
+      - name: Build and smoke test
+        run: autobuild build -A 64 -c release
+      - name: Package
+        run: autobuild package -A 64 -c release --archive-format tzst
+      - name: Verify package contents
+        shell: pwsh
+        run: |
+          $archive = Get-ChildItem *.tar.zst | Select-Object -First 1
+          if (-not $archive) { throw 'no package produced' }
+          $list = tar -tf $archive.Name
+          foreach ($want in 'lib/release/libspeakerfill_output_plugin.dll', 'LICENSES/vlc-speakerfill.txt', 'autobuild-package.xml', 'VERSION.txt') {
+            if (-not ($list -contains $want)) { throw "package is missing $want" }
+          }
+          $hash = (Get-FileHash -Algorithm SHA256 $archive.Name).Hash.ToLowerInvariant()
+          "$($archive.Name)  sha256=$hash" | Tee-Object -Append $env:GITHUB_STEP_SUMMARY
+      - name: Upload tested package
+        uses: actions/upload-artifact@v4
+        with:
+          name: vlc-speakerfill-windows64
+          path: '*.tar.zst'
+          if-no-files-found: error
+
+  # Publishes the package when a tag v<VERSION.txt> is pushed. Tags are created by the owner.
+  release:
+    needs: package
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check tag matches VERSION.txt
+        run: |
+          expected="v$(tr -d '\r\n' < VERSION.txt)"
+          if [ "${GITHUB_REF_NAME}" != "$expected" ]; then echo "tag ${GITHUB_REF_NAME} != $expected"; exit 1; fi
+      - uses: actions/download-artifact@v4
+        with:
+          name: vlc-speakerfill-windows64
+          path: dist
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd dist
+          sha256sum *.tar.zst | tee SHA256SUMS.txt
+          {
+            echo "VLC 3.0.21 speaker-fill WASAPI output module, built with pinned llvm-mingw 20260616 (LLVM 22.1.8). Temporary package."
+            echo
+            echo "SHA-256:"
+            cat SHA256SUMS.txt
+          } > notes.md
+          gh release create "${GITHUB_REF_NAME}" *.tar.zst \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "vlc-speakerfill ${GITHUB_REF_NAME#v} - Windows x64" \
+            --notes-file notes.md
