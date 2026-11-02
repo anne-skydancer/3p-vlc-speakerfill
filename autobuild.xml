@@ -46,10 +46,10 @@
                 <key>build_directory</key><string>stage</string>
                 <key>manifest</key>
                 <array>
+                    <!-- license_file is added by autobuild itself; VERSION.txt stays out of the
+                         archive because other packages (3p-soloud) install one at the root. -->
                     <string>lib/release/libspeakerfill_output_plugin.dll</string>
                     <string>share/vlc-speakerfill/**</string>
-                    <string>LICENSES/*.txt</string>
-                    <string>VERSION.txt</string>
                 </array>
                 <key>configurations</key>
                 <map>

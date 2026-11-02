@@ -54,9 +54,12 @@ jobs:
           $archive = Get-ChildItem *.tar.zst | Select-Object -First 1
           if (-not $archive) { throw 'no package produced' }
           $list = tar -tf $archive.Name
-          foreach ($want in 'lib/release/libspeakerfill_output_plugin.dll', 'LICENSES/vlc-speakerfill.txt', 'autobuild-package.xml', 'VERSION.txt') {
+          foreach ($want in 'lib/release/libspeakerfill_output_plugin.dll', 'LICENSES/vlc-speakerfill.txt', 'autobuild-package.xml', 'share/vlc-speakerfill/build-info.txt') {
             if (-not ($list -contains $want)) { throw "package is missing $want" }
           }
+          $dupes = $list | Group-Object | Where-Object Count -gt 1
+          if ($dupes) { throw "duplicate entries in archive: $($dupes.Name -join ', ')" }
+          if ($list -contains 'VERSION.txt') { throw 'VERSION.txt must not be in the archive (conflicts with other packages)' }
           $hash = (Get-FileHash -Algorithm SHA256 $archive.Name).Hash.ToLowerInvariant()
           "$($archive.Name)  sha256=$hash" | Tee-Object -Append $env:GITHUB_STEP_SUMMARY
       - name: Upload tested package

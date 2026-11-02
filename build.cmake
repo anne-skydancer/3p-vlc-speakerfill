@@ -38,7 +38,6 @@ message(STATUS "Compiler: ${VLC_MODULE_CC}\n${compiler_version}")
 
 file(REMOVE_RECURSE "${stage}/lib" "${stage}/share" "${stage}/LICENSES")
 file(MAKE_DIRECTORY "${stage}/lib/release" "${stage}/LICENSES")
-file(COPY "${root}/VERSION.txt" DESTINATION "${stage}")
 
 # Hash-checked upstream sources and the patch (unchanged from the viewer's prepare_speakerfill.cmake).
 set(SPEAKERFILL_SOURCE_DIR "${stage}/share/vlc-speakerfill/source")
