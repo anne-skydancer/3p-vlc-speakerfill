@@ -30,8 +30,9 @@ execute_process(COMMAND "${VLC_MODULE_CC}" --version OUTPUT_VARIABLE compiler_ve
   COMMAND_ERROR_IS_FATAL ANY)
 execute_process(COMMAND "${VLC_MODULE_CC}" -dumpmachine OUTPUT_VARIABLE compiler_machine
   OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY)
-if (NOT compiler_machine MATCHES "^x86_64-w64-mingw32")
-  message(FATAL_ERROR "Compiler targets '${compiler_machine}', expected x86_64-w64-mingw32")
+# GCC-based MinGW reports x86_64-w64-mingw32; llvm-mingw's clang reports the same target as x86_64-w64-windows-gnu.
+if (NOT compiler_machine MATCHES "^x86_64-w64-(mingw32|windows-gnu)")
+  message(FATAL_ERROR "Compiler targets '${compiler_machine}', expected x86_64-w64-mingw32 or x86_64-w64-windows-gnu")
 endif ()
 message(STATUS "Compiler: ${VLC_MODULE_CC}\n${compiler_version}")
 
