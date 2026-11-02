@@ -4,14 +4,20 @@
 cmake_minimum_required(VERSION 3.24)
 set(root "${CMAKE_CURRENT_LIST_DIR}")
 set(stage "${root}/stage")
-set(packages "${root}/packages")        # autobuild install dir (holds vlc-bin)
+# autobuild installs dependencies under the package's build_directory (stage/packages);
+# an explicit --install-dir may put them at <root>/packages instead.
+set(packages "${stage}/packages")
+if (NOT EXISTS "${packages}/include/vlc/plugins/vlc_common.h" AND EXISTS "${root}/packages/include/vlc/plugins/vlc_common.h")
+  set(packages "${root}/packages")
+endif ()
+message(STATUS "Dependencies (vlc-bin) under ${packages}")
 
 # Mirror of the viewer's AUTOBUILD_INSTALL_DIR / VLCCORE_LIBRARY.
 set(AUTOBUILD_INSTALL_DIR "${packages}")
-find_library(VLCCORE_LIBRARY NAMES libvlccore.lib PATHS "${packages}/lib/release" REQUIRED NO_DEFAULT_PATH)
 if (NOT EXISTS "${AUTOBUILD_INSTALL_DIR}/include/vlc/plugins/vlc_common.h")
-  message(FATAL_ERROR "vlc-bin is not installed under ${packages}; run: autobuild install -A 64")
+  message(FATAL_ERROR "vlc-bin is not installed under ${packages} (nor ${root}/packages); run: autobuild install -A 64")
 endif ()
+find_library(VLCCORE_LIBRARY NAMES libvlccore.lib PATHS "${packages}/lib/release" REQUIRED NO_DEFAULT_PATH)
 
 # Deliberately no fallback to any other compiler: the module is GNU C and must be built by MinGW.
 find_program(VLC_MODULE_CC NAMES x86_64-w64-mingw32-gcc NO_CACHE)
