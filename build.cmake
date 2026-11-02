@@ -51,11 +51,22 @@ file(DOWNLOAD "https://raw.githubusercontent.com/videolan/vlc/3.0.21/COPYING.LIB
   EXPECTED_HASH SHA256=dc626520dcd53a22f727af3ee42c770e56c97a64fe3adb063799d8ab032fe551 TLS_VERIFY ON)
 
 set(SPEAKERFILL_OUTPUT "${stage}/lib/release/libspeakerfill_output_plugin.dll")
-execute_process(COMMAND "${VLC_MODULE_CC}" -shared -std=gnu11 -O2 -g -DHAVE_ATTRIBUTE_PACKED -D__PLUGIN__ -DMODULE_STRING="speakerfill_output"
-    -I "${AUTOBUILD_INSTALL_DIR}/include/vlc/plugins" -I "${SPEAKERFILL_SOURCE_DIR}"
-    "${SPEAKERFILL_SOURCE_DIR}/speakerfill_output.c" "${VLCCORE_LIBRARY}"
+set(SPEAKERFILL_OBJECT "${stage}/speakerfill_output.o")
+set(cflags -std=gnu11 -O2 -g -DHAVE_ATTRIBUTE_PACKED -D__PLUGIN__ -DMODULE_STRING="speakerfill_output"
+    -I "${AUTOBUILD_INSTALL_DIR}/include/vlc/plugins" -I "${SPEAKERFILL_SOURCE_DIR}")
+# Compile and link as two steps so a failure reports which one, and with what code.
+execute_process(COMMAND "${VLC_MODULE_CC}" ${cflags} -c "${SPEAKERFILL_SOURCE_DIR}/speakerfill_output.c" -o "${SPEAKERFILL_OBJECT}"
+  RESULT_VARIABLE compile_result)
+if (NOT compile_result EQUAL 0)
+  message(FATAL_ERROR "Compile failed: ${compile_result}")
+endif ()
+execute_process(COMMAND "${VLC_MODULE_CC}" -v -shared "${SPEAKERFILL_OBJECT}" "${VLCCORE_LIBRARY}"
     -lole32 -luuid -lksuser -lwinmm -lws2_32 -o "${SPEAKERFILL_OUTPUT}"
-  COMMAND_ERROR_IS_FATAL ANY)
+  RESULT_VARIABLE link_result)
+if (NOT link_result EQUAL 0)
+  message(FATAL_ERROR "Link failed: ${link_result}")
+endif ()
+file(REMOVE "${SPEAKERFILL_OBJECT}")
 
 # Smoke test: a VLC 3 plugin must export its module entry points and link libvlccore.
 execute_process(COMMAND "${MINGW_OBJDUMP}" -p "${SPEAKERFILL_OUTPUT}"
