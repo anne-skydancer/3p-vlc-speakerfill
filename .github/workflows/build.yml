@@ -88,17 +88,40 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cd dist
-          sha256sum *.tar.zst | tee SHA256SUMS.txt
+          archive=$(ls *.tar.zst)
+          sha256sum "$archive" | tee SHA256SUMS.txt
+          sha1sum "$archive" | tee SHA1SUMS.txt
+          tar --zstd -xOf "$archive" share/vlc-speakerfill/build-info.txt > build-info.txt
+          tar --zstd -xOf "$archive" autobuild-package.xml > autobuild-package.xml
           {
-            echo "VLC 3.0.21 speaker-fill WASAPI output module (patched wasapi.c), built with the MinGW-w64 GCC of the GitHub windows-2025 image. Temporary package until the Rust audio engine reaches vkstorm-release."
+            echo "VLC 3.0.21 speaker-fill WASAPI output module (modules/audio_output/wasapi.c with Vulkanstorm's patch), prebuilt so the Windows viewer build needs no MinGW. Temporary: retired when the Rust audio engine reaches vkstorm-release."
             echo
+            echo "## Package"
+            echo "- name: vlc-speakerfill, version: ${GITHUB_REF_NAME#v}, platform: windows64"
+            echo "- licence: LGPL-2.1+ (LICENSES/vlc-speakerfill.txt, VLC's COPYING.LIB)"
+            echo "- copyright: Copyright (C) 2012 Remi Denis-Courmont and VLC authors"
+            echo "- source commit: ${GITHUB_SHA}"
+            echo "- build run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo
+            echo "## Upstream sources (VLC 3.0.21, SHA-256 pinned in prepare_speakerfill.cmake)"
+            sed -n 's/^speakerfill_source(\([^ ]*\) \([^ ]*\) \([0-9a-f]*\))/- \2 (`\3`)/p' ../prepare_speakerfill.cmake
+            echo "- COPYING.LIB (\`dc626520dcd53a22f727af3ee42c770e56c97a64fe3adb063799d8ab032fe551\`)"
+            echo
+            echo "## Compiler"
             echo '```'
-            tar --zstd -xOf *.tar.zst share/vlc-speakerfill/build-info.txt
+            cat build-info.txt
             echo '```'
-            echo "SHA-256:"
-            cat SHA256SUMS.txt
+            echo
+            echo "## autobuild-package.xml"
+            echo '```xml'
+            cat autobuild-package.xml
+            echo '```'
+            echo
+            echo "## Checksums"
+            echo '```'
+            echo "sha256  $(cut -d' ' -f1 SHA256SUMS.txt)"
+            echo "sha1    $(cut -d' ' -f1 SHA1SUMS.txt)"
+            echo '```'
+            echo "autobuild.xml: hash_algorithm sha256 with the sha256 above, url the asset below."
           } > notes.md
-          gh release create "${GITHUB_REF_NAME}" *.tar.zst \
-            --repo "${GITHUB_REPOSITORY}" \
-            --title "vlc-speakerfill ${GITHUB_REF_NAME#v} - Windows x64" \
-            --notes-file notes.md
+          gh release create "${GITHUB_REF_NAME}" "$archive" SHA256SUMS.txt SHA1SUMS.txt build-info.txt autobuild-package.xml             --repo "${GITHUB_REPOSITORY}"             --title "vlc-speakerfill ${GITHUB_REF_NAME#v} - Windows x64"             --notes-file notes.md
